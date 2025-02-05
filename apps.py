@@ -1,40 +1,26 @@
-import streamlit as st
-from seleniumbase import Driver
 import time
+import os
+import subprocess
+import chromedriver_autoinstaller
+from seleniumbase import Driver
+import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-from selenium.webdriver.common.by import By
 
-# Function to extract email, phone, booking link from website
-def extract_details_from_website(website_url):
-    email = "N/A"
-    phone = "N/A"
-    booking_link = "N/A"
-    
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(website_url, headers=headers, timeout=5)
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Extract email
-            email_match = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", soup.text)
-            email = email_match[0] if email_match else "N/A"
-            
-            # Extract phone number
-            phone_match = re.findall(r"\+?\d{1,2}[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", soup.text)
-            phone = phone_match[0] if phone_match else "N/A"
-            
-            # Extract booking link
-            booking_tag = soup.find("a", href=re.compile(".*(book|appointment|schedule).*", re.IGNORECASE))
-            booking_link = booking_tag["href"] if booking_tag else "N/A"
-    except Exception as e:
-        print("Error fetching details:", e)
+# Install Chromium if not present in Streamlit Cloud
+def install_chromium():
+    if not os.path.exists("/usr/bin/chromium"):
+        print("Installing Chromium...")
+        subprocess.run(["apt-get", "update"], check=True)
+        subprocess.run(["apt-get", "install", "-y", "chromium-browser"], check=True)
 
-    return {"Email": email, "Phone": phone, "Booking Link": booking_link}
+# Call the install function
+install_chromium()
+
+# Ensure ChromeDriver is installed automatically
+chromedriver_autoinstaller.install()
 
 # Streamlit UI
 st.title("🔍 Google Maps Business Scraper")
@@ -44,21 +30,55 @@ st.write("Enter a business category and location to extract details.")
 category = st.text_input("Enter Business Category")
 location = st.text_input("Enter Country Name")
 
+# Function to extract email, phone, booking link from website
+def extract_details_from_website(website_url):
+    email = "N/A"
+    phone = "N/A"
+    booking_link = "N/A"
+
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(website_url, headers=headers, timeout=5)
+
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # Extract email
+            email_match = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", soup.text)
+            email = email_match[0] if email_match else "N/A"
+
+            # Extract phone number
+            phone_match = re.findall(r"\+?\d{1,2}[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", soup.text)
+            phone = phone_match[0] if phone_match else "N/A"
+
+            # Extract booking link
+            booking_tag = soup.find("a", href=re.compile(".*(book|appointment|schedule).*", re.IGNORECASE))
+            booking_link = booking_tag["href"] if booking_tag else "N/A"
+    except Exception as e:
+        print("Error fetching details:", e)
+
+    return {"Email": email, "Phone": phone, "Booking Link": booking_link}
+
 # Button to start scraping
 if st.button("Extract Data"):
-    # Initialize the WebDriver (No need to install Chromium manually, seleniumbase handles this)
-    driver = Driver(uc=True, headless=True)  # Use headless mode
-    
-    # Function to search Google Maps and scrape business details
+    # Start WebDriver (Headless Chrome)
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run in headless mode
+    options.add_argument("--no-sandbox")  # Bypass OS security model
+    options.add_argument("--disable-dev-shm-usage")  # Prevent shared memory issues
+    options.add_argument("--disable-gpu")  # Disable GPU
+    options.add_argument("--remote-debugging-port=9222")  # Debugging port
+
+    # Use the correct browser option "chrome"
+    driver = Driver(browser="chrome", options=options)  # Make sure we're using 'chrome', not 'chromium'
+
     def search_google_maps(category, location):
         search_query = f"{category} in {location}"
         url = f"https://www.google.com/maps/search/{search_query}"
         driver.get(url)
         time.sleep(5)  # Wait for results to load
-        
+
         business_data = []
-        
-        # Updated to use find_elements with By.CLASS_NAME and By.CSS_SELECTOR (Selenium 4.x changes)
         businesses = driver.find_elements(By.CLASS_NAME, "Nv2PK")
 
         for business in businesses[:10]:  # Extract first 10 results
@@ -72,7 +92,7 @@ if st.button("Extract Data"):
                 time.sleep(3)
 
                 # Extract Google Maps URL
-                business_url = driver.current_url  
+                business_url = driver.current_url
 
                 # Extract website
                 try:
@@ -141,4 +161,4 @@ if st.button("Extract Data"):
     else:
         st.warning("⚠️ No data found. Please check the category and location.")
 
-    driver.quit()
+    driver.quit()  # Close the browser
