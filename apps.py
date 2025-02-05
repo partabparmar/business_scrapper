@@ -1,14 +1,12 @@
 import streamlit as st
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+from seleniumbase import Driver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 import time
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
+import os
 
 # Streamlit UI
 st.title("🔍 Google Maps Business Scraper")
@@ -16,57 +14,52 @@ st.write("Enter a business category and location to extract details.")
 
 # Input fields
 category = st.text_input("Enter Business Category")
-location = st.text_input("Enter Country/City Name")
+location = st.text_input("Enter Country Name")
 
-# Function to extract email, phone, and booking link from website
+# Function to extract email, phone, booking link from website
 def extract_details_from_website(website_url):
     email = "N/A"
     phone = "N/A"
     booking_link = "N/A"
-
+    
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(website_url, headers=headers, timeout=5)
-
+        
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-
+            
             # Extract email
             email_match = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", soup.text)
             email = email_match[0] if email_match else "N/A"
-
+            
             # Extract phone number
-            phone_match = re.findall(r"(\+?\d{1,2}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?[\d\-.\s]+", soup.text)
-            phone = phone_match[0][0] if phone_match else "N/A"
-
+            phone_match = re.findall(r"\+?\d{1,2}[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", soup.text)
+            phone = phone_match[0] if phone_match else "N/A"
+            
             # Extract booking link
-            booking = soup.find("a", href=re.compile(".*(book|appointment|schedule).*", re.IGNORECASE))
-            if booking:
-                booking_link = booking['href']
-
+            booking_tag = soup.find("a", href=re.compile(".*(book|appointment|schedule).*", re.IGNORECASE))
+            booking_link = booking_tag["href"] if booking_tag else "N/A"
     except Exception as e:
-        pass
+        print("Error fetching details:", e)
 
     return {"Email": email, "Phone": phone, "Booking Link": booking_link}
 
+# Function to setup the WebDriver
+def setup_driver():
+    driver = Driver(uc=True, headless=False)  # Automatically handles the WebDriver
+    return driver
+
 # Button to start scraping
 if st.button("Extract Data"):
-    # Set up Selenium WebDriver
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode for Streamlit Cloud
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-
-    # Use WebDriver Manager to handle ChromeDriver
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    # Ensure Chrome WebDriver is available
+    driver = setup_driver()
 
     def search_google_maps(category, location):
         search_query = f"{category} in {location}"
         url = f"https://www.google.com/maps/search/{search_query}"
         driver.get(url)
-        time.sleep(5)  # Wait for page to load
+        time.sleep(5)  # Wait for results to load
 
         business_data = []
         businesses = driver.find_elements(By.CLASS_NAME, "Nv2PK")
@@ -105,7 +98,7 @@ if st.button("Extract Data"):
                 except:
                     opening_hours = "N/A"
 
-                # Extract email, phone, and booking link from website
+                # Extract email, phone, and booking link from the website
                 website_details = extract_details_from_website(website) if website != "N/A" else {"Email": "N/A", "Phone": "N/A", "Booking Link": "N/A"}
 
                 # Append business data to list
@@ -122,6 +115,7 @@ if st.button("Extract Data"):
                     "Google Maps URL": business_url
                 })
             except Exception as e:
+                print("Error extracting business details:", e)
                 continue
 
         return business_data
