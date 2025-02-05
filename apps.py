@@ -1,25 +1,15 @@
+from seleniumbase import Driver
 import time
 import os
 import subprocess
 import chromedriver_autoinstaller
-from seleniumbase import Driver
 import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
 
-# Install Chromium if not present in Streamlit Cloud
-def install_chromium():
-    if not os.path.exists("/usr/bin/chromium"):
-        print("Installing Chromium...")
-        subprocess.run(["apt-get", "update"], check=True)
-        subprocess.run(["apt-get", "install", "-y", "chromium-browser"], check=True)
-
-# Call the install function
-install_chromium()
-
-# Ensure ChromeDriver is installed automatically
+# Install the necessary drivers for Chromium/Chrome automatically
 chromedriver_autoinstaller.install()
 
 # Streamlit UI
@@ -70,7 +60,7 @@ if st.button("Extract Data"):
     options.add_argument("--remote-debugging-port=9222")  # Debugging port
 
     # Use the correct browser option "chrome"
-    driver = Driver(browser="chrome", options=options)  # Make sure we're using 'chrome', not 'chromium'
+    driver = Driver(browser="chrome", options=options)  # Make sure we're using 'chrome'
 
     def search_google_maps(category, location):
         search_query = f"{category} in {location}"
