@@ -1,20 +1,22 @@
 import streamlit as st
+import subprocess
+import sys
 from seleniumbase import Driver
-from selenium.webdriver.common.by import By
 import time
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-import os
 
-# Streamlit UI
-st.title("🔍 Google Maps Business Scraper")
-st.write("Enter a business category and location to extract details.")
+# Install Chromium and Chromedriver
+def install_chromium_and_chromedriver():
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "chromium"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "chromedriver-autoinstaller"])
 
-# Input fields
-category = st.text_input("Enter Business Category")
-location = st.text_input("Enter Country Name")
+# Set up the WebDriver with headless Chromium
+def setup_driver():
+    driver = Driver(uc=True, headless=True)  # Use headless mode
+    return driver
 
 # Function to extract email, phone, booking link from website
 def extract_details_from_website(website_url):
@@ -45,30 +47,34 @@ def extract_details_from_website(website_url):
 
     return {"Email": email, "Phone": phone, "Booking Link": booking_link}
 
-# Function to setup the WebDriver
-def setup_driver():
-    driver = Driver(uc=True, headless=False)  # Automatically handles the WebDriver
-    return driver
+# Streamlit UI
+st.title("🔍 Google Maps Business Scraper")
+st.write("Enter a business category and location to extract details.")
+
+# Input fields
+category = st.text_input("Enter Business Category")
+location = st.text_input("Enter Country Name")
 
 # Button to start scraping
 if st.button("Extract Data"):
-    # Ensure Chrome WebDriver is available
+    install_chromium_and_chromedriver()  # Ensure Chromium and WebDriver are installed
     driver = setup_driver()
 
+    # Function to search Google Maps and scrape business details
     def search_google_maps(category, location):
         search_query = f"{category} in {location}"
         url = f"https://www.google.com/maps/search/{search_query}"
         driver.get(url)
         time.sleep(5)  # Wait for results to load
-
+        
         business_data = []
-        businesses = driver.find_elements(By.CLASS_NAME, "Nv2PK")
+        businesses = driver.find_elements_by_class_name("Nv2PK")
 
         for business in businesses[:10]:  # Extract first 10 results
             try:
-                name = business.find_element(By.CLASS_NAME, "qBF1Pd").text
-                address = business.find_element(By.CLASS_NAME, "W4Efsd").text
-                contact_info = business.find_elements(By.CLASS_NAME, "UsdlK")
+                name = business.find_element_by_class_name("qBF1Pd").text
+                address = business.find_element_by_class_name("W4Efsd").text
+                contact_info = business.find_elements_by_class_name("UsdlK")
                 phone = contact_info[0].text if contact_info else "N/A"
 
                 business.click()  # Click to open details
@@ -79,21 +85,21 @@ if st.button("Extract Data"):
 
                 # Extract website
                 try:
-                    website_element = driver.find_element(By.CSS_SELECTOR, "a.CsEnBe")
+                    website_element = driver.find_element_by_css_selector("a.CsEnBe")
                     website = website_element.get_attribute("href")
                 except:
                     website = "N/A"
 
                 # Extract plus code
                 try:
-                    plus_code_element = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'Plus code')]")
+                    plus_code_element = driver.find_element_by_xpath("//button[contains(@aria-label, 'Plus code')]")
                     plus_code = plus_code_element.text
                 except:
                     plus_code = "N/A"
 
                 # Extract opening hours
                 try:
-                    hours_element = driver.find_element(By.CLASS_NAME, "JjSWRd")
+                    hours_element = driver.find_element_by_class_name("JjSWRd")
                     opening_hours = hours_element.text.replace("\n", " | ")
                 except:
                     opening_hours = "N/A"
